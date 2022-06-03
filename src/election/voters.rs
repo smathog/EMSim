@@ -5,6 +5,7 @@
 
 use crate::election::election_profile::CandidateID;
 use enum_dispatch::enum_dispatch;
+use std::collections::HashMap;
 
 /// Trait to define a voter
 /// Voters can cast either ordinal ballots (ranked, i.e. A>B>C>D) or cardinal ballots
@@ -12,24 +13,25 @@ use enum_dispatch::enum_dispatch;
 #[enum_dispatch]
 pub trait Voter {
     /// A voter casts an ordinal ballot by returning a sorted (descending) Vec
-    /// of preferences by CandidateID
-    fn cast_ordinal_ballot(&self) -> Vec<CandidateID>;
+    /// of preferences by CandidateID. Note that this style of ordinal ballot does
+    /// not permit equalities.
+    fn cast_ordinal_ballot(&self) -> &Vec<CandidateID>;
 
     /// A voter casts a cardinal ballot by returning a Vec of ratings of candidates
     /// The score of CandidateID.0 is cast_cardinal_ballot(range)[CandidateID.0].
     /// range indicates the possible valid ratings range: [0, range].
-    fn cast_cardinal_ballot(&self, range: usize) -> Vec<usize>;
+    fn cast_cardinal_ballot(&mut self, range: usize) -> &Vec<usize>;
 }
 
 /// Enum for static polymorphism (enum dispatch) of all voters
 #[enum_dispatch(Voter)]
-enum Voters {
+pub enum Voters {
     HonestVoter,
 }
 
 /// An HonestVoter represents a voter who casts their ballot directly off of their utility
 /// assessment of the candidates; that is, non-strategically.
-struct HonestVoter {
+pub struct HonestVoter {
     /// A vector containing this voter's assessment of the utility the candidates provide them
     /// as a float in the range [0, 1].
     /// That is, utilities[0] is the utility this voter ascribes CandidateID(0) for the election
@@ -42,36 +44,137 @@ struct HonestVoter {
     /// A:1 B:0 C:2.
     /// Note that this is *not* considered strategic voting for the purposes of this simulator.
     scales: bool,
+
+    /// Since an HonestVoter always votes honestly, their ordinal vote should never change.
+    /// Thus extra calculation can be avoided by caching
+    cached_ordinal_vote: Vec<CandidateID>,
+
+    /// Since an HonestVoter always votes honestly, their scaled utilities should never change.
+    cached_scaled_utilities: Option<Vec<f64>>,
+
+    /// Since an HonestVoter always votes honestly, their given vote for a given rating should
+    /// never change.
+    cached_cardinal_ballots: HashMap<usize, Vec<usize>>,
+}
+
+impl HonestVoter {
+    pub fn new(utilities: Vec<f64>, scales: bool) -> Self {
+        // Precompute ordinal ballot
+        let mut candidates: Vec<_> = (0..(utilities.len())).map(|i| CandidateID(i)).collect();
+        candidates.sort_unstable_by(|&CandidateID(a), &CandidateID(b)| {
+            utilities[b].partial_cmp(&utilities[a]).unwrap()
+        });
+
+        if scales {
+            let scaled_utilities = scale_utilities_linearly(&utilities);
+            Self {
+                utilities,
+                scales,
+                cached_ordinal_vote: candidates,
+                cached_scaled_utilities: Some(scaled_utilities),
+                cached_cardinal_ballots: HashMap::new(),
+            }
+        } else {
+            Self {
+                utilities,
+                scales,
+                cached_ordinal_vote: candidates,
+                cached_scaled_utilities: None,
+                cached_cardinal_ballots: HashMap::new(),
+            }
+        }
+    }
+
+    fn calculate_cardinal_ballot(&mut self, range: usize) {
+        // Check if already cached; if it is, just return
+        if self.cached_cardinal_ballots.contains_key(&range) {
+            return
+        }
+
+        // Need to calculate the ballot and cache it
+        // Get reference to the utility vector we're using
+        let adjusted_utilities = if let Some(ref utils) = self.cached_scaled_utilities {
+            utils
+        } else {
+            &self.utilities
+        };
+
+        // Convert f64 utilities to usize ratings in range [0, range]
+        let ballot = adjusted_utilities
+            .into_iter()
+            .map(|&f| (range as f64 * f).round() as usize)
+            .collect();
+
+        // Cache the ballot vec
+        self.cached_cardinal_ballots.insert(range, ballot);
+    }
 }
 
 impl Voter for HonestVoter {
     /// Sorts the candidates in order of descending honest utility according to the HonestVoter
-    fn cast_ordinal_ballot(&self) -> Vec<CandidateID> {
-        let mut candidates: Vec<_> = (0..(self.utilities.len()))
-            .map(|i| CandidateID(i))
-            .collect();
-        candidates.sort_unstable_by(|&CandidateID(a), &CandidateID(b)|
-            b.partial_cmp(&a).unwrap());
-        candidates
+    /// Returns a reference to a precomputed ordinal ballot
+    fn cast_ordinal_ballot(&self) -> &Vec<CandidateID> {
+        &self.cached_ordinal_vote
     }
 
     /// Returns a rating in [0, range] for each candidate based on the HonestVoter's honest utility,
     /// possibly scaling to min/max the ballot.
-    fn cast_cardinal_ballot(&self, range: usize) -> Vec<usize> {
-        // Adjust utilities to convert to ratings if should be scaled
-        let adjusted_utilities = if self.scales {
-            let max = self.utilities.iter().max().copied().unwrap();
-            let min = self.utilities.iter().min.copied().unwrap();
-            self.utilities.iter()
-                .map(|&f| if max != min {(f - min) / (max - min)} else {max})
-                .collect()
-        } else {
-            self.utilities.clone()
-        };
+    fn cast_cardinal_ballot(&mut self, range: usize) -> &Vec<usize> {
+        // Calculate the ballot, if not already cached
+        self.calculate_cardinal_ballot(range);
+        // Return reference to the ballot vec
+        self.cached_cardinal_ballots.get(&range).unwrap()
+    }
+}
 
-        // Convert f64 utilities to usize ratings in range [0, range]
-        adjusted_utilities.into_iter()
-            .map(|f| (range as f64 * f).round() as usize)
-            .collect()
+/// Helper function to scale utilities linearly so the min is 0 and max is 1, provided min != max
+fn scale_utilities_linearly(utilities: &Vec<f64>) -> Vec<f64> {
+    let max = utilities
+        .iter()
+        .max_by(|&a, &b| a.partial_cmp(b).unwrap())
+        .copied()
+        .unwrap();
+    let min = utilities
+        .iter()
+        .min_by(|&a, &b| a.partial_cmp(b).unwrap())
+        .copied()
+        .unwrap();
+    utilities
+        .iter()
+        .map(|&f| {
+            if max != min {
+                (f - min) / (max - min)
+            } else {
+                max
+            }
+        })
+        .collect()
+}
+
+/// Unit tests for this module
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Unit tests for HonestVoter
+    #[test]
+    fn ordinal_order_correct() {
+        let voter = HonestVoter::new(vec![0.3, 0.5, 0.1], false);
+        assert_eq!(
+            voter.cast_ordinal_ballot(),
+            &vec![CandidateID(1), CandidateID(0), CandidateID(2)]
+        );
+    }
+
+    #[test]
+    fn scales_correct() {
+        let mut voter = HonestVoter::new(vec![0.3, 0.5, 0.1], true);
+        assert_eq!(voter.cast_cardinal_ballot(10), &vec![5, 10, 0]);
+    }
+
+    #[test]
+    fn no_scales_correct() {
+        let mut voter = HonestVoter::new(vec![0.3, 0.5, 0.1], false);
+        assert_eq!(voter.cast_cardinal_ballot(10), &vec![3, 5, 1]);
     }
 }
