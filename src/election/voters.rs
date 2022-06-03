@@ -5,6 +5,7 @@
 
 use crate::election::election_profile::CandidateID;
 use enum_dispatch::enum_dispatch;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
 /// Trait to define a voter
@@ -15,12 +16,20 @@ pub trait Voter {
     /// A voter casts an ordinal ballot by returning a sorted (descending) Vec
     /// of preferences by CandidateID. Note that this style of ordinal ballot does
     /// not permit equalities.
-    fn cast_ordinal_ballot(&self) -> &Vec<CandidateID>;
+    fn cast_ordinal_ballot(&self, method_name: &str) -> &Vec<CandidateID>;
 
     /// A voter casts a cardinal ballot by returning a Vec of ratings of candidates
     /// The score of CandidateID.0 is cast_cardinal_ballot(range)[CandidateID.0].
     /// range indicates the possible valid ratings range: [0, range].
-    fn cast_cardinal_ballot(&mut self, range: usize) -> &Vec<usize>;
+    fn cast_cardinal_ballot(&mut self, range: usize, method_name: &str) -> &Vec<usize>;
+
+    /// Given two candidates, returns the voter's honest preference.
+    fn honest_preference<F: Fn(&usize, &usize) -> Ordering>(
+        &self,
+        first: CandidateID,
+        second: CandidateID,
+        tie_breaker: F,
+    ) -> CandidateID;
 }
 
 /// Enum for static polymorphism (enum dispatch) of all voters
@@ -88,7 +97,7 @@ impl HonestVoter {
     fn calculate_cardinal_ballot(&mut self, range: usize) {
         // Check if already cached; if it is, just return
         if self.cached_cardinal_ballots.contains_key(&range) {
-            return
+            return;
         }
 
         // Need to calculate the ballot and cache it
@@ -113,17 +122,36 @@ impl HonestVoter {
 impl Voter for HonestVoter {
     /// Sorts the candidates in order of descending honest utility according to the HonestVoter
     /// Returns a reference to a precomputed ordinal ballot
-    fn cast_ordinal_ballot(&self) -> &Vec<CandidateID> {
+    fn cast_ordinal_ballot(&self, method_name: &str) -> &Vec<CandidateID> {
         &self.cached_ordinal_vote
     }
 
     /// Returns a rating in [0, range] for each candidate based on the HonestVoter's honest utility,
     /// possibly scaling to min/max the ballot.
-    fn cast_cardinal_ballot(&mut self, range: usize) -> &Vec<usize> {
+    fn cast_cardinal_ballot(&mut self, range: usize, method_name: &str) -> &Vec<usize> {
         // Calculate the ballot, if not already cached
         self.calculate_cardinal_ballot(range);
         // Return reference to the ballot vec
         self.cached_cardinal_ballots.get(&range).unwrap()
+    }
+
+    fn honest_preference<F: Fn(&usize, &usize) -> Ordering>(
+        &self,
+        first: CandidateID,
+        second: CandidateID,
+        tie_breaker: F,
+    ) -> CandidateID {
+        if self.utilities[first.0] > self.utilities[second.0] {
+            first
+        } else if self.utilities[first.0] < self.utilities[second.0] {
+            second
+        } else { // Equality, break with tie_breaker
+            match tie_breaker(&first.0, &second.0) {
+                Ordering::Less => {second}
+                Ordering::Equal => {first}
+                Ordering::Greater => {panic!("Tie-breaker functions should not return equality!")}
+            }
+        }
     }
 }
 
@@ -161,7 +189,7 @@ mod tests {
     fn ordinal_order_correct() {
         let voter = HonestVoter::new(vec![0.3, 0.5, 0.1], false);
         assert_eq!(
-            voter.cast_ordinal_ballot(),
+            voter.cast_ordinal_ballot("test"),
             &vec![CandidateID(1), CandidateID(0), CandidateID(2)]
         );
     }
@@ -169,12 +197,12 @@ mod tests {
     #[test]
     fn scales_correct() {
         let mut voter = HonestVoter::new(vec![0.3, 0.5, 0.1], true);
-        assert_eq!(voter.cast_cardinal_ballot(10), &vec![5, 10, 0]);
+        assert_eq!(voter.cast_cardinal_ballot(10, "test"), &vec![5, 10, 0]);
     }
 
     #[test]
     fn no_scales_correct() {
         let mut voter = HonestVoter::new(vec![0.3, 0.5, 0.1], false);
-        assert_eq!(voter.cast_cardinal_ballot(10), &vec![3, 5, 1]);
+        assert_eq!(voter.cast_cardinal_ballot(10, "test"), &vec![3, 5, 1]);
     }
 }

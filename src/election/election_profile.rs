@@ -11,5 +11,5 @@ where
 }
 
 /// Separate type for indexing candidates
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub struct CandidateID(pub(crate) usize);
