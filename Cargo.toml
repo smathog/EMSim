@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 enum_dispatch = "0.3.8"
+invoker-macro = {path = "invoker-macro"}
