@@ -3,3 +3,4 @@ mod voters;
 mod election_methods;
 
 pub use election_profile::ElectionProfile;
+pub use election_methods::ElectionMethods;

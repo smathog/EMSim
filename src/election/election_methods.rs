@@ -8,14 +8,15 @@ use crate::election::election_profile::CandidateID;
 use crate::election::voters::*;
 use std::cmp::Ordering;
 
-use invoker_macro::show_streams;
+use invoker_macro::inject_method_counter;
 
 /// Struct to serve as a namespace for election method implementations.
 /// Additionally should allow for a proc macro to operate over its impl block of methods to
 /// automate things like executing all methods on a given Vec of voters and counting the number of
 /// available election methods.
-struct ElectionMethods;
+pub struct ElectionMethods;
 
+#[inject_method_counter]
 impl ElectionMethods {
     /// Also known as FPTP (First Past the Post).
     /// All voters vote for their top-ranked candidate. The candidate with the most votes wins.
@@ -76,7 +77,6 @@ fn plurality_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
     tie_breaker: F,
     method_name: &str,
 ) -> Vec<CandidateID> {
-    println!("{}", "invoked!");
     // Calculate the vote total each candidate has earned
     let mut vote_totals = vec![0usize; num_candidates];
     for voter in voters {
