@@ -1,5 +1,7 @@
+use crate::election::ElectionMethods;
+
 mod election;
 
 fn main() {
-    election::ElectionMethods::list_methods();
+    println!("Hello world!");
 }

@@ -8,7 +8,7 @@ use crate::election::election_profile::CandidateID;
 use crate::election::voters::*;
 use std::cmp::Ordering;
 
-use invoker_macro::inject_method_counter;
+use invoker_macro::invoke_all;
 
 /// Struct to serve as a namespace for election method implementations.
 /// Additionally should allow for a proc macro to operate over its impl block of methods to
@@ -16,7 +16,7 @@ use invoker_macro::inject_method_counter;
 /// available election methods.
 pub struct ElectionMethods;
 
-#[inject_method_counter]
+#[invoke_all]
 impl ElectionMethods {
     /// Also known as FPTP (First Past the Post).
     /// All voters vote for their top-ranked candidate. The candidate with the most votes wins.
@@ -148,5 +148,14 @@ mod tests {
         assert_eq!(ElectionMethods::fptp_runoff(&mut runoff_differs(), 3, usize::cmp),
             vec![CandidateID(1), CandidateID(2), CandidateID(0)]
         );
+    }
+
+    // Test invoke_all function
+    #[test]
+    fn test_all() {
+        ElectionMethods::invoke_all(&mut runoff_differs(),
+                                    3,
+                                    usize::cmp,
+                                    |v| println!("Called with {:?}", v));
     }
 }
