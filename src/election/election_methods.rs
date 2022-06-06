@@ -46,12 +46,11 @@ impl ElectionMethods {
         let mut vote_totals = vec![0usize; 2];
         for voter in voters {
             match voter.honest_preference(fptp_ranking[0], fptp_ranking[1]) {
-                Ordering::Less => {vote_totals[1] += 1}
+                Ordering::Less => vote_totals[1] += 1,
                 Ordering::Equal => {} // No preference
-                Ordering::Greater => {vote_totals[0] += 1}
+                Ordering::Greater => vote_totals[0] += 1,
             }
         }
-
         let winner = (0usize..2)
             .max_by(|u1, u2| {
                 vote_totals[*u1]
@@ -65,6 +64,71 @@ impl ElectionMethods {
         }
         fptp_ranking
     }
+
+    /// Voters cast ordinal ballots. Top-two candidates by plurality advance to an instant runoff.
+    pub fn contingent_vote<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
+        voters: &mut Vec<T>,
+        num_candidates: usize,
+        tie_breaker: F,
+    ) -> Vec<CandidateID> {
+        let method_name = "contingent_vote";
+
+        // Get ordinal ballots
+        let ballots = voters
+            .iter_mut()
+            .map(|v| v.cast_ordinal_ballot(method_name))
+            .collect::<Vec<_>>();
+
+        // Run FPTP election:
+        let mut vote_totals = vec![0; num_candidates];
+        for &ballot in &ballots {
+            let CandidateID(top) = ballot[0];
+            vote_totals[top] += 1;
+        }
+
+        // Get FPTP ranking of candidates:
+        let mut candidates = (0..num_candidates)
+            .map((|i| CandidateID(i)))
+            .collect::<Vec<_>>();
+        sort_candidates_by_vec(&mut candidates, &vote_totals, tie_breaker);
+
+        // See whether candidate first or second is preferred on ballots:
+        let (first_c, second_c) = (candidates[0], candidates[1]);
+        let votes = ballots
+            .into_iter()
+            .fold((0, 0), |(mut first, mut second), ballot| {
+                for &candidate in ballot {
+                    if first_c == candidate {
+                        first += 1;
+                        break;
+                    } else if second_c == candidate {
+                        second += 1;
+                        break;
+                    }
+                }
+                (first, second)
+            });
+
+        if votes.0 > votes.1 {
+            candidates
+        } else if votes.1 > votes.0 {
+            candidates.swap(0, 1);
+            candidates
+        } else {
+            match tie_breaker(&first_c.0, &second_c.0) {
+                Ordering::Less => {
+                    candidates.swap(0, 1);
+                    candidates
+                }
+                Ordering::Equal => {
+                    panic!("Tie-breakers into voting methods should be decisive!")
+                }
+                Ordering::Greater => candidates,
+            }
+        }
+    }
+
+    
 }
 
 /// Driver for plurality elections; necessary so that voters who use method-based strategic voting
@@ -87,13 +151,24 @@ fn plurality_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
     let mut results = (0..num_candidates)
         .map(|v| CandidateID(v))
         .collect::<Vec<_>>();
-    results.sort_by(|&CandidateID(a), &CandidateID(b)| {
-        vote_totals[b]
-            .partial_cmp(&vote_totals[a])
+    sort_candidates_by_vec(&mut results, &vote_totals, tie_breaker);
+    results
+}
+
+/// Helper function: given a vector of candidates and a vector of some quantity of the same length,
+/// sorts the vector of candidates in decreasing order by the corresponding field in the quantity
+/// vector (that is, Candidate(x) is sorted by key v[x] descending) with a passed-in tie breaker.
+fn sort_candidates_by_vec<T: PartialOrd, F: Fn(&usize, &usize) -> Ordering + Copy>(
+    candidates: &mut Vec<CandidateID>,
+    v: &Vec<T>,
+    tie_breaker: F,
+) {
+    candidates.sort_unstable_by(|&CandidateID(a), &CandidateID(b)| {
+        v[b]
+            .partial_cmp(&v[a])
             .unwrap()
             .then(tie_breaker(&a, &b))
     });
-    results
 }
 
 /// Unit tests for this module
@@ -131,8 +206,9 @@ mod tests {
             ElectionMethods::plurality(&mut majority_election(), 3, usize::cmp),
             vec![CandidateID(2), CandidateID(1), CandidateID(0)]
         );
-        assert_eq!(ElectionMethods::plurality(&mut runoff_differs(), 3, usize::cmp),
-                   vec![CandidateID(2), CandidateID(1), CandidateID(0)]
+        assert_eq!(
+            ElectionMethods::plurality(&mut runoff_differs(), 3, usize::cmp),
+            vec![CandidateID(2), CandidateID(1), CandidateID(0)]
         );
     }
 
@@ -143,7 +219,8 @@ mod tests {
             ElectionMethods::fptp_runoff(&mut majority_election(), 3, usize::cmp),
             vec![CandidateID(2), CandidateID(1), CandidateID(0)]
         );
-        assert_eq!(ElectionMethods::fptp_runoff(&mut runoff_differs(), 3, usize::cmp),
+        assert_eq!(
+            ElectionMethods::fptp_runoff(&mut runoff_differs(), 3, usize::cmp),
             vec![CandidateID(1), CandidateID(2), CandidateID(0)]
         );
     }
@@ -151,9 +228,8 @@ mod tests {
     // Test invoke_all function
     #[test]
     fn test_all() {
-        ElectionMethods::invoke_all(&mut runoff_differs(),
-                                    3,
-                                    usize::cmp,
-                                    |v| println!("Called with {:?}", v));
+        ElectionMethods::invoke_all(&mut runoff_differs(), 3, usize::cmp, |v| {
+            println!("Called with {:?}", v)
+        });
     }
 }
