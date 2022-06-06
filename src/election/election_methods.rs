@@ -128,7 +128,8 @@ impl ElectionMethods {
         }
     }
 
-    
+
+
 }
 
 /// Driver for plurality elections; necessary so that voters who use method-based strategic voting
