@@ -16,20 +16,27 @@ pub trait Voter {
     /// A voter casts an ordinal ballot by returning a sorted (descending) Vec
     /// of preferences by CandidateID. Note that this style of ordinal ballot does
     /// not permit equalities.
-    fn cast_ordinal_ballot(&self, method_name: &str) -> &Vec<CandidateID>;
+    fn cast_ordinal_ballot(&mut self, method_name: &str) -> &Vec<CandidateID>;
+
+    /// A voter casts an ordinal ballot by returning a sorted (descending) ballot.
+    /// This style of ballot does permit ranked equalities, so a ballot A > B = C > D would be
+    /// a vec of the form {{A}, {B, C}, {D}}
+    fn cast_ordinal_equal_ballot(&mut self, method_name: &str) -> &Vec<Vec<CandidateID>>;
 
     /// A voter casts a cardinal ballot by returning a Vec of ratings of candidates
     /// The score of CandidateID.0 is cast_cardinal_ballot(range)[CandidateID.0].
     /// range indicates the possible valid ratings range: [0, range].
     fn cast_cardinal_ballot(&mut self, range: usize, method_name: &str) -> &Vec<usize>;
 
-    /// Given two candidates, returns the voter's honest preference.
-    fn honest_preference<F: Fn(&usize, &usize) -> Ordering>(
-        &self,
-        first: CandidateID,
-        second: CandidateID,
-        tie_breaker: F,
-    ) -> CandidateID;
+    /// Given two candidates (first, second), return whether votes likes first more, less, or equal
+    /// to second.
+    fn honest_preference(&self, first: CandidateID, second: CandidateID) -> Ordering;
+
+    /// Return a reference to the voter's utility vec
+    fn utilities(&self) -> &Vec<f64>;
+
+    /// Return the voter's honest utility assessment of candidate id
+    fn candidate_utility(&self, _: CandidateID) -> f64;
 }
 
 /// Enum for static polymorphism (enum dispatch) of all voters
@@ -58,6 +65,10 @@ pub struct HonestVoter {
     /// Thus extra calculation can be avoided by caching
     cached_ordinal_vote: Vec<CandidateID>,
 
+    /// Since an HonestVoter always votes honestly, their ordinal equal vote should never change.
+    /// Thus extra calculation can be avoided by caching
+    cached_ordinal_equal_vote: Vec<Vec<CandidateID>>,
+
     /// Since an HonestVoter always votes honestly, their scaled utilities should never change.
     cached_scaled_utilities: Option<Vec<f64>>,
 
@@ -74,12 +85,29 @@ impl HonestVoter {
             utilities[b].partial_cmp(&utilities[a]).unwrap()
         });
 
+        // Precompute ordinal-equal ballot
+        let candidates_with_equality = candidates
+            .iter()
+            .fold((Vec::new(), f64::NAN), |(mut vec, mut val), &candidate| {
+                let CandidateID(id) = candidate;
+                if utilities[id] != val {
+                    vec.push(vec![candidate]);
+                    val = utilities[id];
+                } else {
+                    vec.last_mut().unwrap().push(candidate);
+                }
+                (vec, val)
+            })
+            .0;
+
+
         if scales {
             let scaled_utilities = scale_utilities_linearly(&utilities);
             Self {
                 utilities,
                 scales,
                 cached_ordinal_vote: candidates,
+                cached_ordinal_equal_vote: candidates_with_equality,
                 cached_scaled_utilities: Some(scaled_utilities),
                 cached_cardinal_ballots: HashMap::new(),
             }
@@ -88,6 +116,7 @@ impl HonestVoter {
                 utilities,
                 scales,
                 cached_ordinal_vote: candidates,
+                cached_ordinal_equal_vote: candidates_with_equality,
                 cached_scaled_utilities: None,
                 cached_cardinal_ballots: HashMap::new(),
             }
@@ -122,8 +151,13 @@ impl HonestVoter {
 impl Voter for HonestVoter {
     /// Sorts the candidates in order of descending honest utility according to the HonestVoter
     /// Returns a reference to a precomputed ordinal ballot
-    fn cast_ordinal_ballot(&self, method_name: &str) -> &Vec<CandidateID> {
+    fn cast_ordinal_ballot(&mut self, method_name: &str) -> &Vec<CandidateID> {
         &self.cached_ordinal_vote
+    }
+
+    /// Returns a reference to a precomputed ordinal-equal ballot
+    fn cast_ordinal_equal_ballot(&mut self, method_name: &str) -> &Vec<Vec<CandidateID>> {
+        &self.cached_ordinal_equal_vote
     }
 
     /// Returns a rating in [0, range] for each candidate based on the HonestVoter's honest utility,
@@ -135,23 +169,22 @@ impl Voter for HonestVoter {
         self.cached_cardinal_ballots.get(&range).unwrap()
     }
 
-    fn honest_preference<F: Fn(&usize, &usize) -> Ordering>(
-        &self,
-        first: CandidateID,
-        second: CandidateID,
-        tie_breaker: F,
-    ) -> CandidateID {
+    fn honest_preference(&self, first: CandidateID, second: CandidateID) -> Ordering {
         if self.utilities[first.0] > self.utilities[second.0] {
-            first
+            Ordering::Greater
         } else if self.utilities[first.0] < self.utilities[second.0] {
-            second
-        } else { // Equality, break with tie_breaker
-            match tie_breaker(&first.0, &second.0) {
-                Ordering::Less => {second}
-                Ordering::Equal => {first}
-                Ordering::Greater => {panic!("Tie-breaker functions should not return equality!")}
-            }
+            Ordering::Less
+        } else {
+            Ordering::Equal
         }
+    }
+
+    fn utilities(&self) -> &Vec<f64> {
+        &self.utilities
+    }
+
+    fn candidate_utility(&self, CandidateID(id): CandidateID) -> f64 {
+        self.utilities[id]
     }
 }
 
@@ -187,10 +220,19 @@ mod tests {
     // Unit tests for HonestVoter
     #[test]
     fn ordinal_order_correct() {
-        let voter = HonestVoter::new(vec![0.3, 0.5, 0.1], false);
+        let mut voter = HonestVoter::new(vec![0.3, 0.5, 0.1], false);
         assert_eq!(
             voter.cast_ordinal_ballot("test"),
             &vec![CandidateID(1), CandidateID(0), CandidateID(2)]
+        );
+    }
+
+    #[test]
+    fn ordinal_equal_ballot_correct() {
+        let mut voter = HonestVoter::new(vec![0.3, 0.5, 0.5, 0.1], false);
+        assert_eq!(
+            voter.cast_ordinal_equal_ballot("test"),
+            &vec![vec![CandidateID(1), CandidateID(2)], vec![CandidateID(0)], vec![CandidateID(3)]]
         );
     }
 

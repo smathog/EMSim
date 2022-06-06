@@ -45,12 +45,10 @@ impl ElectionMethods {
         // Find which of the top-two FPTP ranked candidates is preferred
         let mut vote_totals = vec![0usize; 2];
         for voter in voters {
-            if voter.honest_preference(fptp_ranking[0], fptp_ranking[1], tie_breaker)
-                == fptp_ranking[0]
-            {
-                vote_totals[0] += 1;
-            } else {
-                vote_totals[1] += 1;
+            match voter.honest_preference(fptp_ranking[0], fptp_ranking[1]) {
+                Ordering::Less => {vote_totals[1] += 1}
+                Ordering::Equal => {} // No preference
+                Ordering::Greater => {vote_totals[0] += 1}
             }
         }
 
