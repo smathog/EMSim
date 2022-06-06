@@ -28,6 +28,10 @@ pub trait Voter {
     /// range indicates the possible valid ratings range: [0, range].
     fn cast_cardinal_ballot(&mut self, range: usize, method_name: &str) -> &Vec<usize>;
 
+    /// A voter casts an approval ballot by returning a Vec of those candidates of which they
+    /// approve.
+    fn cast_approval_ballot(&mut self, method_name: &str) -> &Vec<CandidateID>;
+
     /// Given two candidates (first, second), return whether votes likes first more, less, or equal
     /// to second.
     fn honest_preference(&self, first: CandidateID, second: CandidateID) -> Ordering;
@@ -61,6 +65,12 @@ pub struct HonestVoter {
     /// Note that this is *not* considered strategic voting for the purposes of this simulator.
     scales: bool,
 
+    /// This voter's ApprovalThresholdBehavior
+    threshold_behavior: ApprovalThresholdBehavior,
+
+    /// Since an HonestVoter always votes honestly, their approval ballot should never change.
+    cached_approval_ballot: Vec<CandidateID>,
+
     /// Since an HonestVoter always votes honestly, their ordinal vote should never change.
     /// Thus extra calculation can be avoided by caching
     cached_ordinal_vote: Vec<CandidateID>,
@@ -78,7 +88,11 @@ pub struct HonestVoter {
 }
 
 impl HonestVoter {
-    pub fn new(utilities: Vec<f64>, scales: bool) -> Self {
+    pub fn new(
+        utilities: Vec<f64>,
+        scales: bool,
+        threshold_behavior: ApprovalThresholdBehavior,
+    ) -> Self {
         // Precompute ordinal ballot
         let mut candidates: Vec<_> = (0..(utilities.len())).map(|i| CandidateID(i)).collect();
         candidates.sort_unstable_by(|&CandidateID(a), &CandidateID(b)| {
@@ -100,12 +114,31 @@ impl HonestVoter {
             })
             .0;
 
+        // Precompute approval ballot
+        let cached_approval_ballot = match &threshold_behavior {
+            ApprovalThresholdBehavior::Function(f) => {
+                let bound = f(&utilities);
+                generate_approval_ballot(&utilities, bound)
+            }
+            ApprovalThresholdBehavior::Mean => {
+                let mean = utilities.iter().copied().sum::<f64>() / (utilities.len() as f64);
+                (0..(utilities.len()))
+                    .filter(|&i| utilities[i] >= mean)
+                    .map(|i| CandidateID(i))
+                    .collect()
+            }
+            ApprovalThresholdBehavior::Preset(bound) => {
+                generate_approval_ballot(&utilities, *bound)
+            }
+        };
 
         if scales {
             let scaled_utilities = scale_utilities_linearly(&utilities);
             Self {
                 utilities,
                 scales,
+                threshold_behavior,
+                cached_approval_ballot,
                 cached_ordinal_vote: candidates,
                 cached_ordinal_equal_vote: candidates_with_equality,
                 cached_scaled_utilities: Some(scaled_utilities),
@@ -115,6 +148,8 @@ impl HonestVoter {
             Self {
                 utilities,
                 scales,
+                threshold_behavior,
+                cached_approval_ballot,
                 cached_ordinal_vote: candidates,
                 cached_ordinal_equal_vote: candidates_with_equality,
                 cached_scaled_utilities: None,
@@ -169,6 +204,11 @@ impl Voter for HonestVoter {
         self.cached_cardinal_ballots.get(&range).unwrap()
     }
 
+    /// Returns a reference to the precomputed approval ballot
+    fn cast_approval_ballot(&mut self, method_name: &str) -> &Vec<CandidateID> {
+        &self.cached_approval_ballot
+    }
+
     fn honest_preference(&self, first: CandidateID, second: CandidateID) -> Ordering {
         if self.utilities[first.0] > self.utilities[second.0] {
             Ordering::Greater
@@ -186,6 +226,19 @@ impl Voter for HonestVoter {
     fn candidate_utility(&self, CandidateID(id): CandidateID) -> f64 {
         self.utilities[id]
     }
+}
+
+/// Helper enum to indicate where a voter would honestly put their Approval threshold.
+/// Voters will cast an approval ballot in support of any candidate above or equal to the threshold.
+/// Note that regardless of threshold, the voter will always approve of at least one candidate
+/// (their favorite).
+pub enum ApprovalThresholdBehavior {
+    /// Set by closure for custom behavior
+    Function(Box<dyn Fn(&Vec<f64>) -> f64>),
+    /// Set as greater than or equal to the mean of utilities
+    Mean,
+    /// Set threshold directly
+    Preset(f64),
 }
 
 /// Helper function to scale utilities linearly so the min is 0 and max is 1, provided min != max
@@ -212,15 +265,37 @@ fn scale_utilities_linearly(utilities: &Vec<f64>) -> Vec<f64> {
         .collect()
 }
 
+/// Helper function to generate approval ballots based on a set bound:
+fn generate_approval_ballot(utilities: &Vec<f64>, bound: f64) -> Vec<CandidateID> {
+    let mut ballot: Vec<CandidateID> = (0..(utilities.len()))
+        .filter(|&i| utilities[i] >= bound)
+        .map(|i| CandidateID(i))
+        .collect();
+    if ballot.is_empty() {
+        ballot.push(CandidateID(
+            utilities
+                .iter()
+                .copied()
+                .enumerate()
+                .map(|(i, u)| (u, i))
+                .max_by(|&(a, _), &(b, _)| a.partial_cmp(&b).unwrap())
+                .unwrap()
+                .1,
+        ));
+    }
+    ballot
+}
+
 /// Unit tests for this module
 #[cfg(test)]
 mod tests {
+    use crate::election::voters::ApprovalThresholdBehavior::Mean;
     use super::*;
 
     // Unit tests for HonestVoter
     #[test]
     fn ordinal_order_correct() {
-        let mut voter = HonestVoter::new(vec![0.3, 0.5, 0.1], false);
+        let mut voter = HonestVoter::new(vec![0.3, 0.5, 0.1], false, Mean);
         assert_eq!(
             voter.cast_ordinal_ballot("test"),
             &vec![CandidateID(1), CandidateID(0), CandidateID(2)]
@@ -229,22 +304,26 @@ mod tests {
 
     #[test]
     fn ordinal_equal_ballot_correct() {
-        let mut voter = HonestVoter::new(vec![0.3, 0.5, 0.5, 0.1], false);
+        let mut voter = HonestVoter::new(vec![0.3, 0.5, 0.5, 0.1], false, Mean);
         assert_eq!(
             voter.cast_ordinal_equal_ballot("test"),
-            &vec![vec![CandidateID(1), CandidateID(2)], vec![CandidateID(0)], vec![CandidateID(3)]]
+            &vec![
+                vec![CandidateID(1), CandidateID(2)],
+                vec![CandidateID(0)],
+                vec![CandidateID(3)]
+            ]
         );
     }
 
     #[test]
     fn scales_correct() {
-        let mut voter = HonestVoter::new(vec![0.3, 0.5, 0.1], true);
+        let mut voter = HonestVoter::new(vec![0.3, 0.5, 0.1], true, Mean);
         assert_eq!(voter.cast_cardinal_ballot(10, "test"), &vec![5, 10, 0]);
     }
 
     #[test]
     fn no_scales_correct() {
-        let mut voter = HonestVoter::new(vec![0.3, 0.5, 0.1], false);
+        let mut voter = HonestVoter::new(vec![0.3, 0.5, 0.1], false, Mean);
         assert_eq!(voter.cast_cardinal_ballot(10, "test"), &vec![3, 5, 1]);
     }
 }

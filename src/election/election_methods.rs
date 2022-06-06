@@ -88,7 +88,7 @@ impl ElectionMethods {
 
         // Get FPTP ranking of candidates:
         let mut candidates = (0..num_candidates)
-            .map((|i| CandidateID(i)))
+            .map(|i| CandidateID(i))
             .collect::<Vec<_>>();
         sort_candidates_by_vec(&mut candidates, &vote_totals, tie_breaker);
 
@@ -175,28 +175,29 @@ fn sort_candidates_by_vec<T: PartialOrd, F: Fn(&usize, &usize) -> Ordering + Cop
 /// Unit tests for this module
 #[cfg(test)]
 mod tests {
+    use crate::election::voters::ApprovalThresholdBehavior::Mean;
     use super::*;
 
     // Helper voter-production functions
     fn majority_election() -> Vec<HonestVoter> {
         let mut voters = Vec::new();
-        voters.push(HonestVoter::new(vec![0.1, 0.4, 0.6], true));
-        voters.push(HonestVoter::new(vec![0.5, 0.4, 0.8], true));
-        voters.push(HonestVoter::new(vec![0.3, 0.7, 0.2], false));
+        voters.push(HonestVoter::new(vec![0.1, 0.4, 0.6], true, Mean));
+        voters.push(HonestVoter::new(vec![0.5, 0.4, 0.8], true, Mean));
+        voters.push(HonestVoter::new(vec![0.3, 0.7, 0.2], false, Mean));
         voters
     }
 
     fn runoff_differs() -> Vec<HonestVoter> {
         let mut voters = Vec::new();
-        voters.push(HonestVoter::new(vec![0.1, 0.4, 0.6], true));
-        voters.push(HonestVoter::new(vec![0.5, 0.4, 0.8], true));
-        voters.push(HonestVoter::new(vec![0.5, 0.4, 0.8], true));
-        voters.push(HonestVoter::new(vec![0.5, 0.4, 0.8], true));
-        voters.push(HonestVoter::new(vec![0.3, 0.7, 0.2], false));
-        voters.push(HonestVoter::new(vec![0.3, 0.7, 0.2], false));
-        voters.push(HonestVoter::new(vec![0.3, 0.7, 0.2], false));
-        voters.push(HonestVoter::new(vec![0.8, 0.6, 0.1], false));
-        voters.push(HonestVoter::new(vec![0.8, 0.6, 0.1], false));
+        voters.push(HonestVoter::new(vec![0.1, 0.4, 0.6], true, Mean));
+        voters.push(HonestVoter::new(vec![0.5, 0.4, 0.8], true, Mean));
+        voters.push(HonestVoter::new(vec![0.5, 0.4, 0.8], true, Mean));
+        voters.push(HonestVoter::new(vec![0.5, 0.4, 0.8], true, Mean));
+        voters.push(HonestVoter::new(vec![0.3, 0.7, 0.2], false, Mean));
+        voters.push(HonestVoter::new(vec![0.3, 0.7, 0.2], false, Mean));
+        voters.push(HonestVoter::new(vec![0.3, 0.7, 0.2], false, Mean));
+        voters.push(HonestVoter::new(vec![0.8, 0.6, 0.1], false, Mean));
+        voters.push(HonestVoter::new(vec![0.8, 0.6, 0.1], false, Mean));
         voters
     }
 
