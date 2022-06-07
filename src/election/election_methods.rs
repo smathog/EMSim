@@ -7,6 +7,8 @@
 use crate::election::election_profile::CandidateID;
 use crate::election::voters::*;
 use std::cmp::Ordering;
+use std::collections::HashSet;
+use std::collections::VecDeque;
 
 use invoker_macro::invoke_all;
 
@@ -128,8 +130,98 @@ impl ElectionMethods {
         }
     }
 
+    /// Instant-runoff voting, also known as the alternative vote or ranked choice voting.
+    /// Voters cast ordinal ballots. At each round, a ballot's top active preference is counted
+    /// as a plurality vote. The candidate with the lowest total is eliminated and the ballots are
+    /// transferred. The process continues until a single candidate wins.
+    pub fn irv<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
+        voters: &mut Vec<T>,
+        num_candidates: usize,
+        tie_breaker: F,
+    ) -> Vec<CandidateID> {
+        let method_name = "irv";
 
+        // Get ballots as stacks
+        let mut stack_ballots = voters
+            .iter_mut()
+            .map(|v| {
+                v.cast_ordinal_ballot(method_name)
+                    .into_iter()
+                    .collect::<VecDeque<_>>()
+            })
+            .collect::<Vec<_>>();
 
+        // Set up set for eliminated candidates
+        let mut eliminated = HashSet::with_capacity(num_candidates);
+        // Vec for elimination order, will reverse to get final ranking
+        let mut elimination_order = Vec::with_capacity(num_candidates);
+        // Vec for plurality vote for each round
+        let mut plurality = vec![0usize; num_candidates];
+
+        loop {
+            // Tabulate plurality ballots for this round
+            for ballot in &mut stack_ballots {
+                // Get rid of the front of the ballot until it contains a non-eliminated candidate
+                // or is empty
+                while let Some(&CandidateID(value)) = ballot.front() {
+                    if !eliminated.contains(value) {
+                        break;
+                    }
+                    ballot.pop_front();
+                }
+
+                //If ballot not exhausted
+                if let Some(&CandidateID(id)) = ballot.front().copied() {
+                    plurality[id] += 1;
+                }
+            }
+
+            // Find the loser of the round
+            let loser = plurality
+                .iter()
+                .copied()
+                .enumerate()
+                .filter(|(i, _)| !eliminated.contains(i))
+                .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap().then(tie_breaker(a, b)))
+                .unwrap()
+                .0;
+            elimination_order.push(CandidateID(loser));
+            eliminated.insert(loser);
+            if elimination_order.len() == num_candidates - 1 {
+                // If final round, add winner and terminate
+                let winner = (0..num_candidates)
+                    .find(|i| !eliminated.contains(i))
+                    .unwrap();
+                elimination_order.push(CandidateID(winner));
+                elimination_order.reverse();
+                break elimination_order;
+            } else {
+                // Otherwise, reset plurality vec for next round
+                plurality.iter_mut().for_each(|v| *v = 0);
+            }
+        }
+    }
+
+    /// Voters cast approval votes. The candidate with the most approval wins.
+    pub fn approval<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
+        voters: &mut Vec<T>,
+        num_candidates: usize,
+        tie_breaker: F,
+    ) -> Vec<CandidateID> {
+        let method_name = "approval";
+        let mut approval_count = vec![0; num_candidates];
+        voters
+            .iter_mut()
+            .map(|v| v.cast_approval_ballot(method_name))
+            .for_each(|ballot| {
+                ballot
+                    .iter()
+                    .for_each(|&CandidateID(id)| approval_count[id] += 1)
+            });
+        let mut candidates = (0..num_candidates).map(|i| CandidateID(i)).collect();
+        sort_candidates_by_vec(&mut candidates, &approval_count, tie_breaker);
+        candidates
+    }
 }
 
 /// Driver for plurality elections; necessary so that voters who use method-based strategic voting
@@ -165,18 +257,16 @@ fn sort_candidates_by_vec<T: PartialOrd, F: Fn(&usize, &usize) -> Ordering + Cop
     tie_breaker: F,
 ) {
     candidates.sort_unstable_by(|&CandidateID(a), &CandidateID(b)| {
-        v[b]
-            .partial_cmp(&v[a])
-            .unwrap()
-            .then(tie_breaker(&a, &b))
+        v[b].partial_cmp(&v[a]).unwrap().then(tie_breaker(&b, &a))
     });
 }
 
 /// Unit tests for this module
 #[cfg(test)]
 mod tests {
-    use crate::election::voters::ApprovalThresholdBehavior::Mean;
     use super::*;
+    use crate::election::voters::ApprovalThresholdBehavior::Mean;
+    use crate::election::voters::*;
 
     // Helper voter-production functions
     fn majority_election() -> Vec<HonestVoter> {
@@ -198,6 +288,30 @@ mod tests {
         voters.push(HonestVoter::new(vec![0.3, 0.7, 0.2], false, Mean));
         voters.push(HonestVoter::new(vec![0.8, 0.6, 0.1], false, Mean));
         voters.push(HonestVoter::new(vec![0.8, 0.6, 0.1], false, Mean));
+        voters
+    }
+
+    /*
+    Profile produced:
+    24: A1 > A2 > B1 > B2 > B3
+    24: A2 > A1 > B1 > B2 > B3
+    20: B1 > B2 > B3 > A1 > A2
+    20: B2 > B3 > B1 > A2 > A1
+    12: B3 > B1 > B2 > A1 > A2
+     */
+    fn irv_differs() -> Vec<HonestVoter> {
+        let mut voters = Vec::new();
+        (0..24).for_each(|_| {
+            voters.push(HonestVoter::new(vec![1.0, 0.9, 0.5, 0.4, 0.3], false, Mean));
+            voters.push(HonestVoter::new(vec![0.9, 1.0, 0.5, 0.4, 0.3], false, Mean));
+        });
+        (0..20).for_each(|_| {
+            voters.push(HonestVoter::new(vec![0.2, 0.3, 1.0, 0.9, 0.7], false, Mean));
+            voters.push(HonestVoter::new(vec![0.3, 0.2, 0.7, 1.0, 0.9], false, Mean));
+        });
+        (0..12).for_each(|_| {
+            voters.push(HonestVoter::new(vec![0.3, 0.2, 0.9, 0.7, 1.0], false, Mean));
+        });
         voters
     }
 
@@ -225,6 +339,14 @@ mod tests {
             ElectionMethods::fptp_runoff(&mut runoff_differs(), 3, usize::cmp),
             vec![CandidateID(1), CandidateID(2), CandidateID(0)]
         );
+    }
+
+    #[test]
+    fn test_irv() {
+        assert_ne!(
+            ElectionMethods::irv(&mut irv_differs(), 5, usize::cmp)[0],
+            ElectionMethods::fptp_runoff(&mut irv_differs(), 5, usize::cmp)[0]
+        )
     }
 
     // Test invoke_all function
