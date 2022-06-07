@@ -45,23 +45,8 @@ impl ElectionMethods {
         let mut fptp_ranking = plurality_driver(voters, num_candidates, tie_breaker, method_name);
 
         // Find which of the top-two FPTP ranked candidates is preferred
-        let mut vote_totals = vec![0usize; 2];
-        for voter in voters {
-            match voter.honest_preference(fptp_ranking[0], fptp_ranking[1]) {
-                Ordering::Less => vote_totals[1] += 1,
-                Ordering::Equal => {} // No preference
-                Ordering::Greater => vote_totals[0] += 1,
-            }
-        }
-        let winner = (0usize..2)
-            .max_by(|u1, u2| {
-                vote_totals[*u1]
-                    .partial_cmp(&vote_totals[*u2])
-                    .unwrap()
-                    .then(tie_breaker(u1, u2))
-            })
-            .unwrap();
-        if winner == 1 {
+        let winner = honest_runoff_driver(voters, tie_breaker, fptp_ranking[0], fptp_ranking[1]);
+        if winner == fptp_ranking[1] {
             fptp_ranking.swap(0, 1);
         }
         fptp_ranking
@@ -209,18 +194,32 @@ impl ElectionMethods {
         tie_breaker: F,
     ) -> Vec<CandidateID> {
         let method_name = "approval";
-        let mut approval_count = vec![0; num_candidates];
-        voters
-            .iter_mut()
-            .map(|v| v.cast_approval_ballot(method_name))
-            .for_each(|ballot| {
-                ballot
-                    .iter()
-                    .for_each(|&CandidateID(id)| approval_count[id] += 1)
-            });
-        let mut candidates = (0..num_candidates).map(|i| CandidateID(i)).collect();
-        sort_candidates_by_vec(&mut candidates, &approval_count, tie_breaker);
-        candidates
+        approval_driver(voters, num_candidates, tie_breaker, method_name)
+    }
+
+    /// Voters cast approval votes. The two candidates with the highest approvals advance to a non-
+    /// instant runoff.
+    pub fn approval_runoff<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
+        voters: &mut Vec<T>,
+        num_candidates: usize,
+        tie_breaker: F,
+    ) -> Vec<CandidateID> {
+        let method_name = "approval_runoff";
+
+        // Get approval ranking:
+        let mut approval_ranking =
+            approval_driver(voters, num_candidates, tie_breaker, method_name);
+
+        let winner = honest_runoff_driver(
+            voters,
+            tie_breaker,
+            approval_ranking[0],
+            approval_ranking[1],
+        );
+        if winner == approval_ranking[1] {
+            approval_ranking.swap(0, 1);
+        }
+        approval_ranking
     }
 
     /// Score voting with a rating range of 0-5
@@ -251,6 +250,54 @@ impl ElectionMethods {
     ) -> Vec<CandidateID> {
         let method_name = "score_100";
         score_driver(voters, num_candidates, tie_breaker, 5, method_name)
+    }
+
+    /// Score voting with a rating range of 0-5
+    /// Followed by a delayed runoff.
+    pub fn score_5_runoff<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
+        voters: &mut Vec<T>,
+        num_candidates: usize,
+        tie_breaker: F,
+    ) -> Vec<CandidateID> {
+        let method_name = "score_5_runoff";
+        let mut scores = score_driver(voters, num_candidates, tie_breaker, 5, method_name);
+        let winner = honest_runoff_driver(voters, tie_breaker, scores[0], scores[1]);
+        if winner == scores[1] {
+            scores.swap(0, 1);
+        }
+        scores
+    }
+
+    /// Score voting with a rating range of 0-10
+    /// Followed by a delayed runoff
+    pub fn score_10_runoff<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
+        voters: &mut Vec<T>,
+        num_candidates: usize,
+        tie_breaker: F,
+    ) -> Vec<CandidateID> {
+        let method_name = "score_10_runoff";
+        let mut scores = score_driver(voters, num_candidates, tie_breaker, 5, method_name);
+        let winner = honest_runoff_driver(voters, tie_breaker, scores[0], scores[1]);
+        if winner == scores[1] {
+            scores.swap(0, 1);
+        }
+        scores
+    }
+
+    /// Score voting with a range of 0-100
+    /// Followed by a delayed runoff
+    pub fn score_100_runoff<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
+        voters: &mut Vec<T>,
+        num_candidates: usize,
+        tie_breaker: F,
+    ) -> Vec<CandidateID> {
+        let method_name = "score_100_runoff";
+        let mut scores = score_driver(voters, num_candidates, tie_breaker, 5, method_name);
+        let winner = honest_runoff_driver(voters, tie_breaker, scores[0], scores[1]);
+        if winner == scores[1] {
+            scores.swap(0, 1);
+        }
+        scores
     }
 }
 
@@ -289,7 +336,8 @@ fn score_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
     // Calculate the vote total each candidate has earned
     let mut vote_totals = vec![0usize; num_candidates];
     for voter in voters {
-        voter.cast_cardinal_ballot(range, method_name)
+        voter
+            .cast_cardinal_ballot(range, method_name)
             .into_iter()
             .copied()
             .enumerate()
@@ -302,6 +350,54 @@ fn score_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
         .collect::<Vec<_>>();
     sort_candidates_by_vec(&mut results, &vote_totals, tie_breaker);
     results
+}
+
+/// Driver for approval voting to avoid code duplication
+fn approval_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
+    voters: &mut Vec<T>,
+    num_candidates: usize,
+    tie_breaker: F,
+    method_name: &str,
+) -> Vec<CandidateID> {
+    let mut approval_count = vec![0; num_candidates];
+    voters
+        .iter_mut()
+        .map(|v| v.cast_approval_ballot(method_name))
+        .for_each(|ballot| {
+            ballot
+                .iter()
+                .for_each(|&CandidateID(id)| approval_count[id] += 1)
+        });
+    let mut candidates = (0..num_candidates).map(|i| CandidateID(i)).collect();
+    sort_candidates_by_vec(&mut candidates, &approval_count, tie_breaker);
+    candidates
+}
+
+/// Simulates an honest delayed runoff between two candidates.
+fn honest_runoff_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
+    voters: &mut Vec<T>,
+    tie_breaker: F,
+    first_candidate: CandidateID,
+    second_candidate: CandidateID,
+) -> CandidateID {
+    let mut vote_totals = vec![0usize; 2];
+    for voter in voters {
+        match voter.honest_preference(first_candidate, second_candidate) {
+            Ordering::Less => vote_totals[1] += 1,
+            Ordering::Equal => {} // No preference
+            Ordering::Greater => vote_totals[0] += 1,
+        }
+    }
+    match (0usize..2).max_by(|u1, u2| {
+        vote_totals[*u1]
+            .partial_cmp(&vote_totals[*u2])
+            .unwrap()
+            .then(tie_breaker(u1, u2))
+    }) {
+        Some(0) => first_candidate,
+        Some(1) => second_candidate,
+        _ => panic!("Tie must be definitely broken by this point!"),
+    }
 }
 
 /// Helper function: given a vector of candidates and a vector of some quantity of the same length,
