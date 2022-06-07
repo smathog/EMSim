@@ -222,6 +222,36 @@ impl ElectionMethods {
         sort_candidates_by_vec(&mut candidates, &approval_count, tie_breaker);
         candidates
     }
+
+    /// Score voting with a rating range of 0-5
+    pub fn score_5<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
+        voters: &mut Vec<T>,
+        num_candidates: usize,
+        tie_breaker: F,
+    ) -> Vec<CandidateID> {
+        let method_name = "score_5";
+        score_driver(voters, num_candidates, tie_breaker, 5, method_name)
+    }
+
+    /// Score voting with a rating range of 0-10
+    pub fn score_10<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
+        voters: &mut Vec<T>,
+        num_candidates: usize,
+        tie_breaker: F,
+    ) -> Vec<CandidateID> {
+        let method_name = "score_10";
+        score_driver(voters, num_candidates, tie_breaker, 5, method_name)
+    }
+
+    /// Score voting with a range of 0-100
+    pub fn score_100<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
+        voters: &mut Vec<T>,
+        num_candidates: usize,
+        tie_breaker: F,
+    ) -> Vec<CandidateID> {
+        let method_name = "score_100";
+        score_driver(voters, num_candidates, tie_breaker, 5, method_name)
+    }
 }
 
 /// Driver for plurality elections; necessary so that voters who use method-based strategic voting
@@ -238,6 +268,32 @@ fn plurality_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
         let ballot = voter.cast_ordinal_ballot(method_name);
         let choice = ballot[0].0;
         vote_totals[choice] += 1;
+    }
+
+    // Generate a list of candidates sorted descending on vote total
+    let mut results = (0..num_candidates)
+        .map(|v| CandidateID(v))
+        .collect::<Vec<_>>();
+    sort_candidates_by_vec(&mut results, &vote_totals, tie_breaker);
+    results
+}
+
+/// Driver for score elections; avoids code duplication for Score5, Score10, and Score100
+fn score_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
+    voters: &mut Vec<T>,
+    num_candidates: usize,
+    tie_breaker: F,
+    range: usize,
+    method_name: &str,
+) -> Vec<CandidateID> {
+    // Calculate the vote total each candidate has earned
+    let mut vote_totals = vec![0usize; num_candidates];
+    for voter in voters {
+        voter.cast_cardinal_ballot(range, method_name)
+            .into_iter()
+            .copied()
+            .enumerate()
+            .for_each(|(id, score)| vote_totals[id] += score)
     }
 
     // Generate a list of candidates sorted descending on vote total
@@ -280,14 +336,15 @@ mod tests {
     fn runoff_differs() -> Vec<HonestVoter> {
         let mut voters = Vec::new();
         voters.push(HonestVoter::new(vec![0.1, 0.4, 0.6], true, Mean));
-        voters.push(HonestVoter::new(vec![0.5, 0.4, 0.8], true, Mean));
-        voters.push(HonestVoter::new(vec![0.5, 0.4, 0.8], true, Mean));
-        voters.push(HonestVoter::new(vec![0.5, 0.4, 0.8], true, Mean));
-        voters.push(HonestVoter::new(vec![0.3, 0.7, 0.2], false, Mean));
-        voters.push(HonestVoter::new(vec![0.3, 0.7, 0.2], false, Mean));
-        voters.push(HonestVoter::new(vec![0.3, 0.7, 0.2], false, Mean));
-        voters.push(HonestVoter::new(vec![0.8, 0.6, 0.1], false, Mean));
-        voters.push(HonestVoter::new(vec![0.8, 0.6, 0.1], false, Mean));
+        for _ in 0..3 {
+            voters.push(HonestVoter::new(vec![0.5, 0.4, 0.8], true, Mean));
+        }
+        for _ in 0..3 {
+            voters.push(HonestVoter::new(vec![0.3, 0.7, 0.2], false, Mean));
+        }
+        for _ in 0..2 {
+            voters.push(HonestVoter::new(vec![0.8, 0.6, 0.1], false, Mean));
+        }
         voters
     }
 
