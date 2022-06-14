@@ -7,7 +7,7 @@ name = "EMSim"
 version = "0.1.0"
 dependencies = [
  "enum_dispatch",
- "invoker-macro",
+ "invoke_impl",
 ]
 
 [[package]]
@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "invoker-macro"
+name = "invoke_impl"
 version = "0.1.0"
 dependencies = [
  "quote",

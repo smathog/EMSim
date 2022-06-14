@@ -3,8 +3,12 @@ use crate::election::ElectionMethods;
 mod election;
 
 fn main() {
-    println!("Number of methods currently implemented: {}", ElectionMethods::METHOD_COUNT);
-    ElectionMethods::METHOD_LIST.iter()
+    println!("Number of ordinal methods currently implemented: {}", ElectionMethods::METHOD_COUNT_ordinal);
+    ElectionMethods::METHOD_LIST_ordinal.iter()
         .enumerate()
-        .for_each(|(i, s)| println!("Election Method {}: {}", i, s));
+        .for_each(|(i, s)| println!("Election Method (Ordinal) {}: {}", i, s));
+    println!("Number of cardinal methods currently implemented: {}", ElectionMethods::METHOD_COUNT_cardinal);
+    ElectionMethods::METHOD_LIST_cardinal.iter()
+        .enumerate()
+        .for_each(|(i, s)| println!("Election Method (Cardinal) {}: {}", i, s));
 }

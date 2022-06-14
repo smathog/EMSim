@@ -10,7 +10,7 @@ use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
-use invoker_macro::invoke_all;
+use invoke_impl::invoke_impl;
 
 /// Struct to serve as a namespace for election method implementations.
 /// Additionally should allow for a proc macro to operate over its impl block of methods to
@@ -18,7 +18,7 @@ use invoker_macro::invoke_all;
 /// available election methods.
 pub struct ElectionMethods;
 
-#[invoke_all]
+#[invoke_impl(name("ordinal"))]
 impl ElectionMethods {
     /// Also known as FPTP (First Past the Post).
     /// All voters vote for their top-ranked candidate. The candidate with the most votes wins.
@@ -186,7 +186,10 @@ impl ElectionMethods {
             }
         }
     }
+}
 
+#[invoke_impl(name("cardinal"))]
+impl ElectionMethods {
     /// Voters cast approval votes. The candidate with the most approval wins.
     pub fn approval<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
         voters: &mut Vec<T>,
@@ -505,8 +508,11 @@ mod tests {
     // Test invoke_all function
     #[test]
     fn test_all() {
-        ElectionMethods::invoke_all(&mut runoff_differs(), 3, usize::cmp, |v| {
-            println!("Called with {:?}", v)
+        ElectionMethods::invoke_all_enum_ordinal(&mut runoff_differs(), 3, usize::cmp, |e, _v| {
+            println!("Called with ordinal method {}", <&str>::from(e))
+        });
+        ElectionMethods::invoke_all_enum_cardinal(&mut runoff_differs(), 3, usize::cmp, |e, _v| {
+            println!("Called with cardinal method {}", <&str>::from(e))
         });
     }
 }
