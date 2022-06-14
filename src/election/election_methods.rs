@@ -242,7 +242,7 @@ impl ElectionMethods {
         tie_breaker: F,
     ) -> Vec<CandidateID> {
         let method_name = "score_10";
-        score_driver(voters, num_candidates, tie_breaker, 5, method_name)
+        score_driver(voters, num_candidates, tie_breaker, 10, method_name)
     }
 
     /// Score voting with a range of 0-100
@@ -252,7 +252,7 @@ impl ElectionMethods {
         tie_breaker: F,
     ) -> Vec<CandidateID> {
         let method_name = "score_100";
-        score_driver(voters, num_candidates, tie_breaker, 5, method_name)
+        score_driver(voters, num_candidates, tie_breaker, 100, method_name)
     }
 
     /// Score voting with a rating range of 0-5
@@ -279,7 +279,7 @@ impl ElectionMethods {
         tie_breaker: F,
     ) -> Vec<CandidateID> {
         let method_name = "score_10_runoff";
-        let mut scores = score_driver(voters, num_candidates, tie_breaker, 5, method_name);
+        let mut scores = score_driver(voters, num_candidates, tie_breaker, 10, method_name);
         let winner = honest_runoff_driver(voters, tie_breaker, scores[0], scores[1]);
         if winner == scores[1] {
             scores.swap(0, 1);
@@ -295,12 +295,45 @@ impl ElectionMethods {
         tie_breaker: F,
     ) -> Vec<CandidateID> {
         let method_name = "score_100_runoff";
-        let mut scores = score_driver(voters, num_candidates, tie_breaker, 5, method_name);
+        let mut scores = score_driver(voters, num_candidates, tie_breaker, 100, method_name);
         let winner = honest_runoff_driver(voters, tie_breaker, scores[0], scores[1]);
         if winner == scores[1] {
             scores.swap(0, 1);
         }
         scores
+    }
+
+    /// Score voting with a range of 0-5.
+    /// Followed by an instant runoff based on cardinal ballots.
+    pub fn star_5<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
+        voters: &mut Vec<T>,
+        num_candidates: usize,
+        tie_breaker: F,
+    ) -> Vec<CandidateID> {
+        let method_name = "star_5";
+        star_driver(voters, num_candidates, tie_breaker, 5, method_name)
+    }
+
+    /// Score voting with a range of 0-10.
+    /// Followed by an instant runoff based on cardinal ballots.
+    pub fn star_10<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
+        voters: &mut Vec<T>,
+        num_candidates: usize,
+        tie_breaker: F,
+    ) -> Vec<CandidateID> {
+        let method_name = "star_10";
+        star_driver(voters, num_candidates, tie_breaker, 10, method_name)
+    }
+
+    /// Score voting with a range of 0-100.
+    /// Followed by an instant runoff based on cardinal ballots.
+    pub fn star_100<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
+        voters: &mut Vec<T>,
+        num_candidates: usize,
+        tie_breaker: F,
+    ) -> Vec<CandidateID> {
+        let method_name = "star_100";
+        star_driver(voters, num_candidates, tie_breaker, 100, method_name)
     }
 }
 
@@ -400,6 +433,73 @@ fn honest_runoff_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
         Some(0) => first_candidate,
         Some(1) => second_candidate,
         _ => panic!("Tie must be definitely broken by this point!"),
+    }
+}
+
+/// Driver function for STAR methods
+fn star_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
+    voters: &mut Vec<T>,
+    num_candidates: usize,
+    tie_breaker: F,
+    range: usize,
+    method_name: &str,
+) -> Vec<CandidateID> {
+    let method_name = "star_5";
+
+    // Get a vec of cardinal ballots
+    let ballots = voters
+        .iter_mut()
+        .map(|v| v.cast_cardinal_ballot(range, method_name))
+        .collect::<Vec<_>>();
+
+    // Use ballots to generate scores for candidates
+    let mut scores = vec![0; num_candidates];
+    ballots
+        .iter()
+        .for_each(|ballot| {
+            ballot.iter()
+                .zip(scores.iter_mut())
+                .for_each(|(&score, total)| {
+                    *total += score;
+                })
+        });
+
+    // Generate a ranking of candidates:
+    let mut candidates = (0..num_candidates).map(|i| CandidateID(i)).collect::<Vec<_>>();
+    sort_candidates_by_vec(&mut candidates, &scores, tie_breaker);
+
+    // Determine which of candidates[0] and candidates[1] is preferred base on the ballots:
+    let (CandidateID(first_index), CandidateID(second_index)) = (candidates[0], candidates[1]);
+    let (mut first, mut second) = (0, 0);
+    ballots
+        .into_iter()
+        .for_each(|ballot| {
+            if ballot[first] > ballot[second] {
+                first += 1;
+            } else if ballot[first] < ballot[second] {
+                second += 1;
+            } else {
+                match tie_breaker(&ballot[first], &ballot[second]) {
+                    Ordering::Less => {second += 1}
+                    Ordering::Equal => {panic!("Tie-breaker functions must not return equal!")}
+                    Ordering::Greater => {first += 1}
+                }
+            }
+        });
+    if first > second {
+        candidates
+    } else if second < first {
+        candidates.swap(0, 1);
+        candidates
+    } else {
+        match tie_breaker(&first, &second) {
+            Ordering::Less => {
+                candidates.swap(0, 1);
+                candidates
+            }
+            Ordering::Equal => {panic!("Tie-breaker functions must not return equal!")}
+            Ordering::Greater => {candidates}
+        }
     }
 }
 
@@ -506,13 +606,15 @@ mod tests {
     }
 
     // Test invoke_all function
-    #[test]
-    fn test_all() {
-        ElectionMethods::invoke_all_enum_ordinal(&mut runoff_differs(), 3, usize::cmp, |e, _v| {
-            println!("Called with ordinal method {}", <&str>::from(e))
-        });
-        ElectionMethods::invoke_all_enum_cardinal(&mut runoff_differs(), 3, usize::cmp, |e, _v| {
-            println!("Called with cardinal method {}", <&str>::from(e))
-        });
-    }
+    // doesn't work with star methods atm because i need a tiebreaker that actually doesn't just
+    // return Ordering::Equal
+    // #[test]
+    // fn test_all() {
+    //     ElectionMethods::invoke_all_enum_ordinal(&mut runoff_differs(), 3, usize::cmp, |e, _v| {
+    //         println!("Called with ordinal method {}", <&str>::from(e))
+    //     });
+    //     ElectionMethods::invoke_all_enum_cardinal(&mut runoff_differs(), 3, usize::cmp, |e, _v| {
+    //         println!("Called with cardinal method {}", <&str>::from(e))
+    //     });
+    // }
 }

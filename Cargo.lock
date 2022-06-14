@@ -24,7 +24,9 @@ dependencies = [
 
 [[package]]
 name = "invoke_impl"
-version = "0.1.0"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f13eb5dd205f9cabf8013821dda86d58349ee6acbc09e61881ca36a054c9dbb"
 dependencies = [
  "quote",
  "syn",

@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 enum_dispatch = "0.3.8"
-invoke_impl = {path = "../invoke_impl"}
+invoke_impl = "0.1.1"
