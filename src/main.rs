@@ -1,6 +1,9 @@
 use crate::election::ElectionMethods;
 
 mod election;
+mod utility_generators;
+
+use utility_generators::foo;
 
 fn main() {
     println!("Number of ordinal methods currently implemented: {}", ElectionMethods::METHOD_COUNT_ordinal);
@@ -11,4 +14,5 @@ fn main() {
     ElectionMethods::METHOD_LIST_cardinal.iter()
         .enumerate()
         .for_each(|(i, s)| println!("Election Method (Cardinal) {}: {}", i, s));
+    foo();
 }

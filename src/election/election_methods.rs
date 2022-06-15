@@ -454,38 +454,39 @@ fn star_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
 
     // Use ballots to generate scores for candidates
     let mut scores = vec![0; num_candidates];
-    ballots
-        .iter()
-        .for_each(|ballot| {
-            ballot.iter()
-                .zip(scores.iter_mut())
-                .for_each(|(&score, total)| {
-                    *total += score;
-                })
-        });
+    ballots.iter().for_each(|ballot| {
+        ballot
+            .iter()
+            .zip(scores.iter_mut())
+            .for_each(|(&score, total)| {
+                *total += score;
+            })
+    });
 
     // Generate a ranking of candidates:
-    let mut candidates = (0..num_candidates).map(|i| CandidateID(i)).collect::<Vec<_>>();
+    let mut candidates = (0..num_candidates)
+        .map(|i| CandidateID(i))
+        .collect::<Vec<_>>();
     sort_candidates_by_vec(&mut candidates, &scores, tie_breaker);
 
     // Determine which of candidates[0] and candidates[1] is preferred base on the ballots:
     let (CandidateID(first_index), CandidateID(second_index)) = (candidates[0], candidates[1]);
     let (mut first, mut second) = (0, 0);
-    ballots
-        .into_iter()
-        .for_each(|ballot| {
-            if ballot[first] > ballot[second] {
-                first += 1;
-            } else if ballot[first] < ballot[second] {
-                second += 1;
-            } else {
-                match tie_breaker(&ballot[first], &ballot[second]) {
-                    Ordering::Less => {second += 1}
-                    Ordering::Equal => {panic!("Tie-breaker functions must not return equal!")}
-                    Ordering::Greater => {first += 1}
+    ballots.into_iter().for_each(|ballot| {
+        if ballot[first] > ballot[second] {
+            first += 1;
+        } else if ballot[first] < ballot[second] {
+            second += 1;
+        } else {
+            match tie_breaker(&ballot[first], &ballot[second]) {
+                Ordering::Less => second += 1,
+                Ordering::Equal => {
+                    panic!("Tie-breaker functions must not return equal!")
                 }
+                Ordering::Greater => first += 1,
             }
-        });
+        }
+    });
     if first > second {
         candidates
     } else if second < first {
@@ -497,8 +498,10 @@ fn star_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
                 candidates.swap(0, 1);
                 candidates
             }
-            Ordering::Equal => {panic!("Tie-breaker functions must not return equal!")}
-            Ordering::Greater => {candidates}
+            Ordering::Equal => {
+                panic!("Tie-breaker functions must not return equal!")
+            }
+            Ordering::Greater => candidates,
         }
     }
 }
