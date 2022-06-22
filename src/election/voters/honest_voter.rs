@@ -3,6 +3,9 @@ use crate::election::voters::*;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
+use crate::election::election_methods::ElectionMethods_invoke_impl_enum_cardinal as CardinalEnum;
+use crate::election::election_methods::ElectionMethods_invoke_impl_enum_ordinal as OrdinalEnum;
+
 /// An HonestVoter represents a voter who casts their ballot directly off of their utility
 /// assessment of the candidates; that is, non-strategically.
 pub struct HonestVoter {
@@ -140,7 +143,7 @@ impl HonestVoter {
 impl Voter for HonestVoter {
     /// Sorts the candidates in order of descending honest utility according to the HonestVoter
     /// Returns a reference to a precomputed ordinal ballot
-    fn cast_ordinal_ballot(&mut self, method_name: &str) -> &Vec<CandidateID> {
+    fn cast_ordinal_ballot(&mut self, method: OrdinalEnum) -> &Vec<CandidateID> {
         &self.cached_ordinal_vote
     }
 
@@ -151,7 +154,7 @@ impl Voter for HonestVoter {
 
     /// Returns a rating in [0, range] for each candidate based on the HonestVoter's honest utility,
     /// possibly scaling to min/max the ballot.
-    fn cast_cardinal_ballot(&mut self, range: usize, method_name: &str) -> &Vec<usize> {
+    fn cast_cardinal_ballot(&mut self, range: usize, method: CardinalEnum) -> &Vec<usize> {
         // Calculate the ballot, if not already cached
         self.calculate_cardinal_ballot(range);
         // Return reference to the ballot vec
@@ -159,7 +162,7 @@ impl Voter for HonestVoter {
     }
 
     /// Returns a reference to the precomputed approval ballot
-    fn cast_approval_ballot(&mut self, method_name: &str) -> &Vec<CandidateID> {
+    fn cast_approval_ballot(&mut self, method: CardinalEnum) -> &Vec<CandidateID> {
         &self.cached_approval_ballot
     }
 
@@ -193,7 +196,7 @@ mod tests {
     fn ordinal_order_correct() {
         let mut voter = HonestVoter::new(vec![0.3, 0.5, 0.1], false, Mean);
         assert_eq!(
-            voter.cast_ordinal_ballot("test"),
+            voter.cast_ordinal_ballot(OrdinalEnum::plurality),
             &vec![CandidateID(1), CandidateID(0), CandidateID(2)]
         );
     }
@@ -214,12 +217,12 @@ mod tests {
     #[test]
     fn scales_correct() {
         let mut voter = HonestVoter::new(vec![0.3, 0.5, 0.1], true, Mean);
-        assert_eq!(voter.cast_cardinal_ballot(10, "test"), &vec![5, 10, 0]);
+        assert_eq!(voter.cast_cardinal_ballot(10, CardinalEnum::score_10), &vec![5, 10, 0]);
     }
 
     #[test]
     fn no_scales_correct() {
         let mut voter = HonestVoter::new(vec![0.3, 0.5, 0.1], false, Mean);
-        assert_eq!(voter.cast_cardinal_ballot(10, "test"), &vec![3, 5, 1]);
+        assert_eq!(voter.cast_cardinal_ballot(10, CardinalEnum::score_10), &vec![3, 5, 1]);
     }
 }

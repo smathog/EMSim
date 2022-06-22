@@ -4,9 +4,12 @@
 //! to allow things like Vecs of multiple kinds of Voter.
 
 use crate::election::election_profile::CandidateID;
+use crate::election::election_methods::ElectionMethods_invoke_impl_enum_cardinal as CardinalEnum;
+use crate::election::election_methods::ElectionMethods_invoke_impl_enum_ordinal as OrdinalEnum;
 use enum_dispatch::enum_dispatch;
 use std::cmp::Ordering;
 use voters::honest_voter::HonestVoter;
+use voters::real_ordinal_voter::RealOrdinalVoter;
 use crate::election::voters;
 
 /// Trait to define a voter
@@ -17,7 +20,7 @@ pub trait Voter {
     /// A voter casts an ordinal ballot by returning a sorted (descending) Vec
     /// of preferences by CandidateID. Note that this style of ordinal ballot does
     /// not permit equalities.
-    fn cast_ordinal_ballot(&mut self, method_name: &str) -> &Vec<CandidateID>;
+    fn cast_ordinal_ballot(&mut self, method: OrdinalEnum) -> &Vec<CandidateID>;
 
     /// A voter casts an ordinal ballot by returning a sorted (descending) ballot.
     /// This style of ballot does permit ranked equalities, so a ballot A > B = C > D would be
@@ -27,11 +30,11 @@ pub trait Voter {
     /// A voter casts a cardinal ballot by returning a Vec of ratings of candidates
     /// The score of CandidateID.0 is cast_cardinal_ballot(range)[CandidateID.0].
     /// range indicates the possible valid ratings range: [0, range].
-    fn cast_cardinal_ballot(&mut self, range: usize, method_name: &str) -> &Vec<usize>;
+    fn cast_cardinal_ballot(&mut self, range: usize, method: CardinalEnum) -> &Vec<usize>;
 
     /// A voter casts an approval ballot by returning a Vec of those candidates of which they
     /// approve.
-    fn cast_approval_ballot(&mut self, method_name: &str) -> &Vec<CandidateID>;
+    fn cast_approval_ballot(&mut self, method: CardinalEnum) -> &Vec<CandidateID>;
 
     /// Given two candidates (first, second), return whether votes likes first more, less, or equal
     /// to second.
@@ -48,6 +51,7 @@ pub trait Voter {
 #[enum_dispatch(Voter)]
 pub enum Voters {
     HonestVoter,
+    RealOrdinalVoter,
 }
 
 /// Helper enum to indicate where a voter would honestly put their Approval threshold.

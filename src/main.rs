@@ -1,3 +1,5 @@
+extern crate core;
+
 use crate::election::ElectionMethods;
 use rand::thread_rng;
 use rand_distr::Beta;

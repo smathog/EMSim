@@ -11,6 +11,8 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 
 use invoke_impl::invoke_impl;
+use ElectionMethods_invoke_impl_enum_ordinal as OrdinalEnum;
+use ElectionMethods_invoke_impl_enum_cardinal as CardinalEnum;
 
 /// Struct to serve as a namespace for election method implementations.
 /// Additionally should allow for a proc macro to operate over its impl block of methods to
@@ -27,9 +29,7 @@ impl ElectionMethods {
         num_candidates: usize,
         tie_breaker: F,
     ) -> Vec<CandidateID> {
-        // Method identifier:
-        let method_name = "plurality";
-        plurality_driver(voters, num_candidates, tie_breaker, method_name)
+        plurality_driver(voters, num_candidates, tie_breaker, OrdinalEnum::plurality)
     }
 
     /// Top-two runoff, with the top-two winners determined via an initial non-instant FPTP race.
@@ -38,11 +38,8 @@ impl ElectionMethods {
         num_candidates: usize,
         tie_breaker: F,
     ) -> Vec<CandidateID> {
-        // Method identifier:
-        let method_name = "fptp_runoff";
-
         // Get a FPTP ranking:
-        let mut fptp_ranking = plurality_driver(voters, num_candidates, tie_breaker, method_name);
+        let mut fptp_ranking = plurality_driver(voters, num_candidates, tie_breaker, OrdinalEnum::fptp_runoff);
 
         // Find which of the top-two FPTP ranked candidates is preferred
         let winner = honest_runoff_driver(voters, tie_breaker, fptp_ranking[0], fptp_ranking[1]);
@@ -58,12 +55,10 @@ impl ElectionMethods {
         num_candidates: usize,
         tie_breaker: F,
     ) -> Vec<CandidateID> {
-        let method_name = "contingent_vote";
-
         // Get ordinal ballots
         let ballots = voters
             .iter_mut()
-            .map(|v| v.cast_ordinal_ballot(method_name))
+            .map(|v| v.cast_ordinal_ballot(OrdinalEnum::contingent_vote))
             .collect::<Vec<_>>();
 
         // Run FPTP election:
@@ -124,13 +119,11 @@ impl ElectionMethods {
         num_candidates: usize,
         tie_breaker: F,
     ) -> Vec<CandidateID> {
-        let method_name = "irv";
-
         // Get ballots as stacks
         let mut stack_ballots = voters
             .iter_mut()
             .map(|v| {
-                v.cast_ordinal_ballot(method_name)
+                v.cast_ordinal_ballot(OrdinalEnum::irv)
                     .into_iter()
                     .collect::<VecDeque<_>>()
             })
@@ -196,8 +189,7 @@ impl ElectionMethods {
         num_candidates: usize,
         tie_breaker: F,
     ) -> Vec<CandidateID> {
-        let method_name = "approval";
-        approval_driver(voters, num_candidates, tie_breaker, method_name)
+        approval_driver(voters, num_candidates, tie_breaker, CardinalEnum::approval)
     }
 
     /// Voters cast approval votes. The two candidates with the highest approvals advance to a non-
@@ -207,11 +199,9 @@ impl ElectionMethods {
         num_candidates: usize,
         tie_breaker: F,
     ) -> Vec<CandidateID> {
-        let method_name = "approval_runoff";
-
         // Get approval ranking:
         let mut approval_ranking =
-            approval_driver(voters, num_candidates, tie_breaker, method_name);
+            approval_driver(voters, num_candidates, tie_breaker, CardinalEnum::approval_runoff);
 
         let winner = honest_runoff_driver(
             voters,
@@ -231,8 +221,7 @@ impl ElectionMethods {
         num_candidates: usize,
         tie_breaker: F,
     ) -> Vec<CandidateID> {
-        let method_name = "score_5";
-        score_driver(voters, num_candidates, tie_breaker, 5, method_name)
+        score_driver(voters, num_candidates, tie_breaker, 5, CardinalEnum::score_5)
     }
 
     /// Score voting with a rating range of 0-10
@@ -241,8 +230,7 @@ impl ElectionMethods {
         num_candidates: usize,
         tie_breaker: F,
     ) -> Vec<CandidateID> {
-        let method_name = "score_10";
-        score_driver(voters, num_candidates, tie_breaker, 10, method_name)
+        score_driver(voters, num_candidates, tie_breaker, 10, CardinalEnum::score_10)
     }
 
     /// Score voting with a range of 0-100
@@ -251,8 +239,7 @@ impl ElectionMethods {
         num_candidates: usize,
         tie_breaker: F,
     ) -> Vec<CandidateID> {
-        let method_name = "score_100";
-        score_driver(voters, num_candidates, tie_breaker, 100, method_name)
+        score_driver(voters, num_candidates, tie_breaker, 100, CardinalEnum::score_100)
     }
 
     /// Score voting with a rating range of 0-5
@@ -262,8 +249,7 @@ impl ElectionMethods {
         num_candidates: usize,
         tie_breaker: F,
     ) -> Vec<CandidateID> {
-        let method_name = "score_5_runoff";
-        let mut scores = score_driver(voters, num_candidates, tie_breaker, 5, method_name);
+        let mut scores = score_driver(voters, num_candidates, tie_breaker, 5, CardinalEnum::score_5_runoff);
         let winner = honest_runoff_driver(voters, tie_breaker, scores[0], scores[1]);
         if winner == scores[1] {
             scores.swap(0, 1);
@@ -278,8 +264,7 @@ impl ElectionMethods {
         num_candidates: usize,
         tie_breaker: F,
     ) -> Vec<CandidateID> {
-        let method_name = "score_10_runoff";
-        let mut scores = score_driver(voters, num_candidates, tie_breaker, 10, method_name);
+        let mut scores = score_driver(voters, num_candidates, tie_breaker, 10, CardinalEnum::score_10_runoff);
         let winner = honest_runoff_driver(voters, tie_breaker, scores[0], scores[1]);
         if winner == scores[1] {
             scores.swap(0, 1);
@@ -294,8 +279,7 @@ impl ElectionMethods {
         num_candidates: usize,
         tie_breaker: F,
     ) -> Vec<CandidateID> {
-        let method_name = "score_100_runoff";
-        let mut scores = score_driver(voters, num_candidates, tie_breaker, 100, method_name);
+        let mut scores = score_driver(voters, num_candidates, tie_breaker, 100, CardinalEnum::score_100_runoff);
         let winner = honest_runoff_driver(voters, tie_breaker, scores[0], scores[1]);
         if winner == scores[1] {
             scores.swap(0, 1);
@@ -310,8 +294,7 @@ impl ElectionMethods {
         num_candidates: usize,
         tie_breaker: F,
     ) -> Vec<CandidateID> {
-        let method_name = "star_5";
-        star_driver(voters, num_candidates, tie_breaker, 5, method_name)
+        star_driver(voters, num_candidates, tie_breaker, 5, CardinalEnum::star_5)
     }
 
     /// Score voting with a range of 0-10.
@@ -321,8 +304,7 @@ impl ElectionMethods {
         num_candidates: usize,
         tie_breaker: F,
     ) -> Vec<CandidateID> {
-        let method_name = "star_10";
-        star_driver(voters, num_candidates, tie_breaker, 10, method_name)
+        star_driver(voters, num_candidates, tie_breaker, 10, CardinalEnum::star_10)
     }
 
     /// Score voting with a range of 0-100.
@@ -332,8 +314,7 @@ impl ElectionMethods {
         num_candidates: usize,
         tie_breaker: F,
     ) -> Vec<CandidateID> {
-        let method_name = "star_100";
-        star_driver(voters, num_candidates, tie_breaker, 100, method_name)
+        star_driver(voters, num_candidates, tie_breaker, 100, CardinalEnum::star_100)
     }
 }
 
@@ -343,12 +324,12 @@ fn plurality_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
     voters: &mut Vec<T>,
     num_candidates: usize,
     tie_breaker: F,
-    method_name: &str,
+    method: OrdinalEnum,
 ) -> Vec<CandidateID> {
     // Calculate the vote total each candidate has earned
     let mut vote_totals = vec![0usize; num_candidates];
     for voter in voters {
-        let ballot = voter.cast_ordinal_ballot(method_name);
+        let ballot = voter.cast_ordinal_ballot(method);
         let choice = ballot[0].0;
         vote_totals[choice] += 1;
     }
@@ -367,13 +348,13 @@ fn score_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
     num_candidates: usize,
     tie_breaker: F,
     range: usize,
-    method_name: &str,
+    method: CardinalEnum,
 ) -> Vec<CandidateID> {
     // Calculate the vote total each candidate has earned
     let mut vote_totals = vec![0usize; num_candidates];
     for voter in voters {
         voter
-            .cast_cardinal_ballot(range, method_name)
+            .cast_cardinal_ballot(range, method)
             .into_iter()
             .copied()
             .enumerate()
@@ -393,12 +374,12 @@ fn approval_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
     voters: &mut Vec<T>,
     num_candidates: usize,
     tie_breaker: F,
-    method_name: &str,
+    method: CardinalEnum,
 ) -> Vec<CandidateID> {
     let mut approval_count = vec![0; num_candidates];
     voters
         .iter_mut()
-        .map(|v| v.cast_approval_ballot(method_name))
+        .map(|v| v.cast_approval_ballot(method))
         .for_each(|ballot| {
             ballot
                 .iter()
@@ -442,14 +423,12 @@ fn star_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
     num_candidates: usize,
     tie_breaker: F,
     range: usize,
-    method_name: &str,
+    method: CardinalEnum,
 ) -> Vec<CandidateID> {
-    let method_name = "star_5";
-
     // Get a vec of cardinal ballots
     let ballots = voters
         .iter_mut()
-        .map(|v| v.cast_cardinal_ballot(range, method_name))
+        .map(|v| v.cast_cardinal_ballot(range, method))
         .collect::<Vec<_>>();
 
     // Use ballots to generate scores for candidates
@@ -524,7 +503,6 @@ fn sort_candidates_by_vec<T: PartialOrd, F: Fn(&usize, &usize) -> Ordering + Cop
 mod tests {
     use super::*;
     use crate::election::voters::ApprovalThresholdBehavior::Mean;
-    use crate::election::voters::*;
 
     // Helper voter-production functions
     fn majority_election() -> Vec<HonestVoter> {
