@@ -7,6 +7,7 @@ use crate::election::election_methods::ElectionMethods_invoke_impl_enum_cardinal
 use crate::election::election_methods::ElectionMethods_invoke_impl_enum_ordinal as OrdinalEnum;
 
 /// A struct that represents an actual cast ordinal ballot
+#[derive(Debug)]
 pub struct RealOrdinalVoter {
     ordinal_ballot: Vec<CandidateID>
 }

@@ -111,3 +111,23 @@ pub fn generate_approval_ballot(utilities: &Vec<f64>, bound: f64) -> Vec<Candida
     }
     ballot
 }
+
+/// Unit tests for this module
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::election::voters::ApprovalThresholdBehavior::Mean;
+    use crate::election::voters::HonestVoter;
+
+    #[test]
+    pub fn can_make_vec() {
+        let mut v = Vec::new();
+        let first = HonestVoter::new(vec![0.1, 0.2], true,Mean);
+        let second = RealOrdinalVoter::new(vec![CandidateID(0), CandidateID(1)]);
+        v.push(Voters::from(first));
+        v.push(Voters::from(second));
+        for voter in v.iter_mut() {
+            println!("{:?}", voter.cast_ordinal_ballot(OrdinalEnum::plurality));
+        }
+    }
+}
