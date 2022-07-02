@@ -3,8 +3,8 @@ use crate::election::voters::*;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-use crate::election::election_methods::ElectionMethods_invoke_impl_enum_cardinal as CardinalEnum;
-use crate::election::election_methods::ElectionMethods_invoke_impl_enum_ordinal as OrdinalEnum;
+use crate::election::election_methods::CardinalEnum;
+use crate::election::election_methods::OrdinalEnum;
 
 /// An HonestVoter represents a voter who casts their ballot directly off of their utility
 /// assessment of the candidates; that is, non-strategically.

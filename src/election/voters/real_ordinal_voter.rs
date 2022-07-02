@@ -3,8 +3,8 @@
 use crate::election::election_profile::CandidateID;
 use crate::election::voters::Voter;
 use std::cmp::Ordering;
-use crate::election::election_methods::ElectionMethods_invoke_impl_enum_cardinal as CardinalEnum;
-use crate::election::election_methods::ElectionMethods_invoke_impl_enum_ordinal as OrdinalEnum;
+use crate::election::election_methods::CardinalEnum;
+use crate::election::election_methods::OrdinalEnum;
 
 /// A struct that represents an actual cast ordinal ballot
 #[derive(Debug)]

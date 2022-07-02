@@ -11,8 +11,8 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 
 use invoke_impl::invoke_impl;
-use ElectionMethods_invoke_impl_enum_ordinal as OrdinalEnum;
-use ElectionMethods_invoke_impl_enum_cardinal as CardinalEnum;
+pub use ElectionMethods_invoke_impl_enum_ordinal as OrdinalEnum;
+pub use ElectionMethods_invoke_impl_enum_cardinal as CardinalEnum;
 
 /// Struct to serve as a namespace for election method implementations.
 /// Additionally should allow for a proc macro to operate over its impl block of methods to

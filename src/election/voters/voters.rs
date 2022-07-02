@@ -4,12 +4,13 @@
 //! to allow things like Vecs of multiple kinds of Voter.
 
 use crate::election::election_profile::CandidateID;
-use crate::election::election_methods::ElectionMethods_invoke_impl_enum_cardinal as CardinalEnum;
-use crate::election::election_methods::ElectionMethods_invoke_impl_enum_ordinal as OrdinalEnum;
+use crate::election::election_methods::CardinalEnum;
+use crate::election::election_methods::OrdinalEnum;
 use enum_dispatch::enum_dispatch;
 use std::cmp::Ordering;
 use voters::honest_voter::HonestVoter;
 use voters::real_ordinal_voter::RealOrdinalVoter;
+use voters::real_cardinal_voter::RealCardinalVoter;
 use crate::election::voters;
 
 /// Trait to define a voter
@@ -52,6 +53,7 @@ pub trait Voter {
 pub enum Voters {
     HonestVoter,
     RealOrdinalVoter,
+    RealCardinalVoter,
 }
 
 /// Helper enum to indicate where a voter would honestly put their Approval threshold.
@@ -119,6 +121,8 @@ mod tests {
     use crate::election::voters::ApprovalThresholdBehavior::Mean;
     use crate::election::voters::HonestVoter;
 
+    /// Make sure that enum_dispatch is working for what we need it for; we can make a Vec holding
+    /// multiple types of voters
     #[test]
     pub fn can_make_vec() {
         let mut v = Vec::new();
