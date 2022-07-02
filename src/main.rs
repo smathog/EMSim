@@ -7,6 +7,7 @@ use rand_distr::Beta;
 mod election;
 mod utility_generators;
 mod metrics;
+mod utility_functions;
 
 fn main() {
     println!("Number of ordinal methods currently implemented: {}", ElectionMethods::METHOD_COUNT_ordinal);

@@ -6,6 +6,7 @@
 /// the runner-up, etc.
 use crate::election::election_profile::CandidateID;
 use crate::election::voters::*;
+use crate::utility_functions::sort_candidates_by_vec;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -483,19 +484,6 @@ fn star_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
             Ordering::Greater => candidates,
         }
     }
-}
-
-/// Helper function: given a vector of candidates and a vector of some quantity of the same length,
-/// sorts the vector of candidates in decreasing order by the corresponding field in the quantity
-/// vector (that is, Candidate(x) is sorted by key v[x] descending) with a passed-in tie breaker.
-fn sort_candidates_by_vec<T: PartialOrd, F: Fn(&usize, &usize) -> Ordering + Copy>(
-    candidates: &mut Vec<CandidateID>,
-    v: &Vec<T>,
-    tie_breaker: F,
-) {
-    candidates.sort_unstable_by(|&CandidateID(a), &CandidateID(b)| {
-        v[b].partial_cmp(&v[a]).unwrap().then(tie_breaker(&b, &a))
-    });
 }
 
 /// Unit tests for this module

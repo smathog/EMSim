@@ -5,3 +5,4 @@ mod voters;
 
 pub use election_profile::ElectionProfile;
 pub use election_methods::ElectionMethods;
+pub use election_profile::CandidateID;

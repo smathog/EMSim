@@ -5,7 +5,8 @@ use super::voters::Voter;
 use crate::election::election_profile::CandidateID;
 use crate::election::election_methods::OrdinalEnum;
 use crate::election::election_methods::CardinalEnum;
-use std::collections::{HashMap, HashSet};
+use crate::utility_functions::sort_candidates_by_vec;
+use std::collections::HashMap;
 use std::cmp::Ordering;
 use std::cmp::Reverse;
 
@@ -48,11 +49,7 @@ impl RealCardinalVoter {
         let mut ordinal_ballot = (0..num_candidates)
             .map(|i| CandidateID(i))
             .collect::<Vec<_>>();
-        ordinal_ballot.sort_unstable_by(|&CandidateID(i), &CandidateID(j)| {
-            ballot[j].partial_cmp(&ballot[i])
-                .unwrap()
-                .then(tiebreaker(&i, &j))
-        });
+        sort_candidates_by_vec(&mut ordinal_ballot, &ballot, tiebreaker);
 
         // Build ordinal-equal ballot
         let mut map : HashMap<usize, Vec<CandidateID>> = HashMap::new();

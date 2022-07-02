@@ -12,7 +12,7 @@ use rand::Rng;
 /// of distributions that are to be used to generate the k candidates_per_distribution\[0]
 /// candidates. The return type is a pair of Vec<Vec<f64>>, the first being the locations of the
 /// candidates, the second being the locations of the voters.
-fn generate_distances<R: Rng, D: Distribution<f64> + Copy>(
+fn generate_locations<R: Rng, D: Distribution<f64> + Copy>(
     rng: &mut R,
     candidate_distributions: &[Vec<D>],
     candidates_per_distribution: &[usize],
