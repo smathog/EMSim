@@ -4,7 +4,12 @@
 use crate::election::voters::Voter;
 use std::cmp::Ordering;
 
-/// Core ElectionProfile struct
+/// Core ElectionProfile struct. Note that instead of the voters vec containing the Voters enum type
+/// we are using for static polymorphism, we instead use the generic parameter T: Voter. This lets
+/// us do things like creating ElectionProfile<HonestVoter, F> which is less memory intensive when
+/// we do not need multiple types of voters present. Since the Voters enum also implements Voter,
+/// it satisfies this trait bound and thus we can use ElectionProfile<Voters, F> in the case we
+/// wish to mix different kinds of voters.
 pub struct ElectionProfile<T, F>
 where
     T: Voter,
@@ -14,10 +19,6 @@ where
     candidates: Vec<CandidateID>,
     tie_breaker: F,
 }
-
-/// Separate type for indexing candidates
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub struct CandidateID(pub(crate) usize);
 
 impl<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy> ElectionProfile<T, F> {
     /// Get a mut reference to the vec of voters
@@ -45,3 +46,7 @@ impl<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy> ElectionProfile<T, F> {
         self.tie_breaker
     }
 }
+
+/// Separate type for indexing candidates
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub struct CandidateID(pub(crate) usize);
