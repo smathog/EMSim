@@ -1,5 +1,9 @@
+//! This mod contains the implementation for the HonestVoter struct, which represents a generated
+//! "honest" voter who does not use strategic voting.
+
 use crate::election::election_profile::CandidateID;
 use crate::election::voters::*;
+use crate::utility_functions::*;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
@@ -51,10 +55,9 @@ impl HonestVoter {
         threshold_behavior: ApprovalThresholdBehavior,
     ) -> Self {
         // Precompute ordinal ballot
-        let mut candidates: Vec<_> = (0..(utilities.len())).map(|i| CandidateID(i)).collect();
-        candidates.sort_unstable_by(|&CandidateID(a), &CandidateID(b)| {
-            utilities[b].partial_cmp(&utilities[a]).unwrap()
-        });
+        let n = utilities.len();
+        let mut candidates = generate_candidates(n);
+        sort_candidates_by_vec(&mut candidates, &utilities, usize::cmp);
 
         // Precompute ordinal-equal ballot
         let candidates_with_equality = candidates
@@ -207,7 +210,7 @@ mod tests {
         assert_eq!(
             voter.cast_ordinal_equal_ballot("test"),
             &vec![
-                vec![CandidateID(1), CandidateID(2)],
+                vec![CandidateID(2), CandidateID(1)],
                 vec![CandidateID(0)],
                 vec![CandidateID(3)]
             ]

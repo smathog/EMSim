@@ -5,7 +5,7 @@ use super::voters::Voter;
 use crate::election::election_profile::CandidateID;
 use crate::election::election_methods::OrdinalEnum;
 use crate::election::election_methods::CardinalEnum;
-use crate::utility_functions::sort_candidates_by_vec;
+use crate::utility_functions::*;
 use std::collections::HashMap;
 use std::cmp::Ordering;
 use std::cmp::Reverse;
@@ -46,9 +46,7 @@ impl RealCardinalVoter {
 
         // Build ordinal ballot from the given cardinal ballot
         let num_candidates = ballot.len();
-        let mut ordinal_ballot = (0..num_candidates)
-            .map(|i| CandidateID(i))
-            .collect::<Vec<_>>();
+        let mut ordinal_ballot = generate_candidates(num_candidates);
         sort_candidates_by_vec(&mut ordinal_ballot, &ballot, tiebreaker);
 
         // Build ordinal-equal ballot

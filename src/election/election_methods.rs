@@ -1,12 +1,13 @@
-/// This module contains the actual election methods themselves.
-/// Each should be of the form fn name<T: Voter>(voters, n, tie_resolver) -> Vec<CandidateID>
-/// Where voters: &mut Vec<T>, num_candidates is usize number of candidates,
-/// tie_resolver is some function to break ties as they emerge,
-/// and the return is a sorted vec in order of finish (i.e. vec[0] is the winner, vec[1] is
-/// the runner-up, etc.
+//! This module contains the actual election methods themselves.
+//! Each should be of the form fn name<T: Voter>(voters, n, tie_resolver) -> Vec<CandidateID>
+//! Where voters: &mut Vec<T>, num_candidates is usize number of candidates,
+//! tie_resolver is some function to break ties as they emerge,
+//! and the return is a sorted vec in order of finish (i.e. vec[0] is the winner, vec[1] is
+//! the runner-up, etc.
+
 use crate::election::election_profile::CandidateID;
 use crate::election::voters::*;
-use crate::utility_functions::sort_candidates_by_vec;
+use crate::utility_functions::*;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -70,9 +71,7 @@ impl ElectionMethods {
         }
 
         // Get FPTP ranking of candidates:
-        let mut candidates = (0..num_candidates)
-            .map(|i| CandidateID(i))
-            .collect::<Vec<_>>();
+        let mut candidates = generate_candidates(num_candidates);
         sort_candidates_by_vec(&mut candidates, &vote_totals, tie_breaker);
 
         // See whether candidate first or second is preferred on ballots:
@@ -336,9 +335,7 @@ fn plurality_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
     }
 
     // Generate a list of candidates sorted descending on vote total
-    let mut results = (0..num_candidates)
-        .map(|v| CandidateID(v))
-        .collect::<Vec<_>>();
+    let mut results = generate_candidates(num_candidates);
     sort_candidates_by_vec(&mut results, &vote_totals, tie_breaker);
     results
 }
@@ -363,9 +360,7 @@ fn score_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
     }
 
     // Generate a list of candidates sorted descending on vote total
-    let mut results = (0..num_candidates)
-        .map(|v| CandidateID(v))
-        .collect::<Vec<_>>();
+    let mut results = generate_candidates(num_candidates);
     sort_candidates_by_vec(&mut results, &vote_totals, tie_breaker);
     results
 }
@@ -386,7 +381,7 @@ fn approval_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
                 .iter()
                 .for_each(|&CandidateID(id)| approval_count[id] += 1)
         });
-    let mut candidates = (0..num_candidates).map(|i| CandidateID(i)).collect();
+    let mut candidates = generate_candidates(num_candidates);
     sort_candidates_by_vec(&mut candidates, &approval_count, tie_breaker);
     candidates
 }
@@ -444,9 +439,7 @@ fn star_driver<T: Voter, F: Fn(&usize, &usize) -> Ordering + Copy>(
     });
 
     // Generate a ranking of candidates:
-    let mut candidates = (0..num_candidates)
-        .map(|i| CandidateID(i))
-        .collect::<Vec<_>>();
+    let mut candidates = generate_candidates(num_candidates);
     sort_candidates_by_vec(&mut candidates, &scores, tie_breaker);
 
     // Determine which of candidates[0] and candidates[1] is preferred base on the ballots:

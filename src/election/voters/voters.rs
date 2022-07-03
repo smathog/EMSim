@@ -69,51 +69,6 @@ pub enum ApprovalThresholdBehavior {
     Preset(f64),
 }
 
-/// Helper function to scale utilities linearly so the min is 0 and max is 1, provided min != max
-pub fn scale_utilities_linearly(utilities: &Vec<f64>) -> Vec<f64> {
-    let max = utilities
-        .iter()
-        .max_by(|&a, &b| a.partial_cmp(b).unwrap())
-        .copied()
-        .unwrap();
-    let min = utilities
-        .iter()
-        .min_by(|&a, &b| a.partial_cmp(b).unwrap())
-        .copied()
-        .unwrap();
-    utilities
-        .iter()
-        .map(|&f| {
-            if max != min {
-                (f - min) / (max - min)
-            } else {
-                max
-            }
-        })
-        .collect()
-}
-
-/// Helper function to generate approval ballots based on a set bound:
-pub fn generate_approval_ballot(utilities: &Vec<f64>, bound: f64) -> Vec<CandidateID> {
-    let mut ballot: Vec<CandidateID> = (0..(utilities.len()))
-        .filter(|&i| utilities[i] >= bound)
-        .map(|i| CandidateID(i))
-        .collect();
-    if ballot.is_empty() {
-        ballot.push(CandidateID(
-            utilities
-                .iter()
-                .copied()
-                .enumerate()
-                .map(|(i, u)| (u, i))
-                .max_by(|&(a, _), &(b, _)| a.partial_cmp(&b).unwrap())
-                .unwrap()
-                .1,
-        ));
-    }
-    ballot
-}
-
 /// Unit tests for this module
 #[cfg(test)]
 mod tests {
